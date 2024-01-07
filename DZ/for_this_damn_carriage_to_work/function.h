@@ -1,5 +1,5 @@
 //
-// Created by Сергей Новиков on 26.05.2023.
+// Created by Сергей Новиков on 26.12.2023.
 //
 
 #ifndef MAIN_CPP_FUNCTION_H
