@@ -1,0 +1,3238 @@
+import sqlite3
+import json
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, InputFile, InputMediaPhoto
+
+
+with open('text/data.json', 'r') as file:
+    stored_data = json.load(file)
+
+with open('text/name.json', 'r') as file:
+    stored_name = json.load(file)
+
+# Создаем экземпляр класса Updater
+with open('text/token.txt', 'r') as f:
+    token = f.read().strip()
+
+updater = Updater(token=token, use_context=True)
+bot = Bot(token=token)
+
+# Получаем диспетчер сообщений
+dispatcher = updater.dispatcher
+
+###########
+##       ## ГЛАВНОЕ МЕНЮ
+###########
+
+# функция для обработки Главного меню
+def main_menu(update, context):
+    print(update)
+    context.user_data['item_name'] = None
+    context.user_data['item_price'] = None
+    context.user_data['back'] = 'main'
+    # Создаем список кнопок
+    with open('photoes/logo.jpg', 'rb') as f:
+        bot.send_photo(chat_id=update.message.chat_id, photo=InputFile(f),caption='Бот магазига <b>Teqqo</b> активирован.',parse_mode='HTML')
+    buttons = [
+        [InlineKeyboardButton(text='🗒Каталог', callback_data='catalog'),
+         InlineKeyboardButton(text='👤Поддержка', callback_data='support')],
+        [InlineKeyboardButton(text='🛒Корзина', callback_data='cart'),
+         InlineKeyboardButton(text='🔊Акции', callback_data='promotions')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons, resize_keyboard=False)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+
+    update.message.reply_text(
+        'Откройте для себя бесконечные возможности c <b>Teqqo</b>. \n \n<b>Выберите нужное действие:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'main_menu'
+
+def main_button(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🗒Каталог', callback_data='catalog'),
+         InlineKeyboardButton(text='👤Поддержка', callback_data='support')],
+        [InlineKeyboardButton(text='🛒Корзина', callback_data='cart'),
+         InlineKeyboardButton(text='🔊Акции', callback_data='promotions')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Откройте для себя бесконечные возможности c <b>Teqqo</b>. \n \n<b>Выберите нужное действие:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'main_button'
+
+# Регистрируем обработчики команд
+dispatcher.add_handler(CommandHandler('start', main_menu))
+
+###########
+##       ## КАТАЛОГ
+###########
+
+# Функция обработки нажатия на кнопку "Каталог"
+def catalog_button(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🧽Аксесуары', callback_data='accessories')],
+        [InlineKeyboardButton(text='💎Пылесосы', callback_data='vacuum_cleaner')],
+        [InlineKeyboardButton(text='⚖️Кухонная техника', callback_data='kitchen_appliances')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_main'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Каталог"</b>. \n \n<b>Выберите нужное действие:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'catalog_button'
+
+###########
+##       ## ДОБАВЛЕНИЕ ЗАКАЗА В КОРЗИНУ
+###########
+def Add_to_basket(update, context):
+    query = update.callback_query
+    query.answer()
+
+    conn = sqlite3.connect('text/bd.db')
+    cursor = conn.cursor()
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS basket
+                 (user_id int, product_name text, product_price real)''')
+
+    product_name = context.user_data['item_name']
+    product_price = context.user_data['item_price']
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data=context.user_data['back'] ),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+    cursor.execute("INSERT INTO basket (user_id, product_name, product_price) VALUES (?, ?, ?)",
+                   (update.callback_query.message.chat_id, product_name, product_price))
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        '<b>Товар добавлен в корзину</b> \n \n<b>Выберите тип:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    conn.commit()
+    conn.close()
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'Add_to_basket'
+
+
+###########
+##       ## АКСЕСУАРЫ
+###########
+
+def accessories_button(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='⚙️Powerstick', callback_data='for_Powerstick'),
+        InlineKeyboardButton(text='🧼Aquastick', callback_data='for_Aquastick'),
+        InlineKeyboardButton(text='☕️Aromastar', callback_data='for_Aromastar')],
+        [InlineKeyboardButton(text='🧴Средства', callback_data='detergents_1'),
+         InlineKeyboardButton(text='📱Magssory for iPhone', callback_data='Magssory_for_iPhone')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_catalog'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Аксесуары"</b>. \n \n<b>Выберите нужное действие:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'accessories_button'
+
+###########
+##       ## ПЕРВАЯ СТРАНИЦА АКСЕСУАРОВ POWERSTICK
+###########
+
+def for_Powerstick_1(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🧹🧹Двойная турбощетка', callback_data='Powerstick_turbo_brush')],
+         [InlineKeyboardButton(text='🐍Гибкий гофрированный шланг', callback_data='Powerstick_hose')],
+        [InlineKeyboardButton(text='💦Насадка для влажной уборки', callback_data='Powerstick_wet_nozzle')],
+        [InlineKeyboardButton(text='🦯Телескопическая труба', callback_data='Powerstick_telescopic_pipe')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_accessories'),
+         InlineKeyboardButton(text='↪️Вперед', callback_data='back_to_for_Powerstick_2')],
+        [InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Аксесуары Powerstick"</b>. \n<b>1/4</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'for_Powerstick_1'
+
+def Powerstick_turbo_brush(update, context):
+    context.user_data['item_name'] = "Powerstick_turbo_brush"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_turbo_brush.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+    with open('photoes/powerstick_turbo_brush.jpeg', 'rb') as f:
+            context.bot.send_photo(chat_id=update.callback_query.message.chat_id, photo=InputFile(f), caption=caption,
+                                   parse_mode='HTML')
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_turbo_brush'
+
+def Powerstick_hose(update, context):
+    context.user_data['item_name'] = "Powerstick_hose"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_hose.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with open('photoes/Powerstick_hose_1.jpeg', 'rb') as f1, open('photoes/Powerstick_hose_2.jpeg', 'rb') as f2:
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_hose'
+
+def Powerstick_wet_nozzle(update, context):
+    context.user_data['item_name'] = "Powerstick_wet_nozzle"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_wet_nozzle.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Powerstick_wet_nozzle_1.jpeg', 'rb') as f1, open('photoes/Powerstick_wet_nozzle_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_wet_nozzle_3.jpeg', 'rb') as f3, open('photoes/Powerstick_wet_nozzle_4.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_wet_nozzle_5.jpeg', 'rb') as f5, open('photoes/Powerstick_wet_nozzle_6.jpeg', 'rb') as f6):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3),InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),InputMediaPhoto(media=f6)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_wet_nozzle'
+
+def Powerstick_telescopic_pipe(update, context):
+    context.user_data['item_name'] = "Powerstick_telescopic_pipe"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_telescopic_pipe.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with open('photoes/Powerstick_telescopic_pipe_1.jpeg', 'rb') as f1, open('photoes/Powerstick_telescopic_pipe_2.jpeg', 'rb') as f2:
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_telescopic_pipe'
+
+##############
+####      #### ВТОРАЯ СТРАНИЦА АКСЕСУАРОВ POWERSTICK
+##############
+def for_Powerstick_2(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🔪Нож для чистки роллера от волос', callback_data='Powerstick_cleaning_knife')],
+         [InlineKeyboardButton(text='🪒Насадка для вычесывания животных', callback_data='Powerstick_animal_combing_attachment')],
+        [InlineKeyboardButton(text='🛏Напольная док-станция', callback_data='Powerstick_floor_docking_station')],
+        [InlineKeyboardButton(text='🦯Складная труба', callback_data='Powerstick_folding_pipe')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_1'),
+         InlineKeyboardButton(text='↪️Вперед', callback_data='back_to_for_Powerstick_3')],
+        [InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Аксесуары Powerstick"</b>. \n<b>2/4</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'for_Powerstick_2'
+
+#Насадка для вычесывания животных
+def Powerstick_cleaning_knife(update, context):
+    context.user_data['item_name'] = "Powerstick_cleaning_knife"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_cleaning_knife.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+    with open('photoes/Powerstick_cleaning_knife.jpeg', 'rb') as f:
+            context.bot.send_photo(chat_id=update.callback_query.message.chat_id, photo=InputFile(f), caption=caption,
+                                   parse_mode='HTML')
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_cleaning_knife'
+
+def Powerstick_animal_combing_attachment(update, context):
+    context.user_data['item_name'] = "Powerstick_animal_combing_attachment"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_animal_combing_attachment.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Powerstick_animal_combing_attachment_1.jpeg', 'rb') as f1, open('photoes/Powerstick_animal_combing_attachment_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_animal_combing_attachment_3.jpeg', 'rb') as f3):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_animal_combing_attachment'
+
+def Powerstick_floor_docking_station(update, context):
+    context.user_data['item_name'] = "Powerstick_floor_docking_station"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_floor_docking_station.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with open('photoes/Powerstick_floor_docking_station_1.jpeg', 'rb') as f1, open('photoes/Powerstick_floor_docking_station_2.jpeg', 'rb') as f2:
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_floor_docking_station'
+
+def Powerstick_folding_pipe(update, context):
+    context.user_data['item_name'] = "Powerstick_folding_pipe"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_folding_pipe.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Powerstick_folding_pipe_1.jpeg', 'rb') as f1, open('photoes/Powerstick_folding_pipe_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_folding_pipe_3.jpeg', 'rb') as f3):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_folding_pipe'
+
+
+###########
+##       ## ТРЕТЬЯ СТРАНИЦА АКСЕСУАРОВ POWERSTICK
+###########
+
+def for_Powerstick_3(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🦽Роликовая щетка для ковровых покрытий', callback_data='Powerstick_roller_brush')],
+         [InlineKeyboardButton(text='🛞Роликовая щетка для твердых покрытий', callback_data='Powerstick_for_hard_surfaces_roller_brush')],
+        [InlineKeyboardButton(text='🧹Мини-турбощетка', callback_data='Powerstick_mini_turbo_brush')],
+        [InlineKeyboardButton(text='🔌Зарядка', callback_data='Charger')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_2'),
+         InlineKeyboardButton(text='↪️Вперед', callback_data='back_to_for_Powerstick_4')],
+        [InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Аксесуары Powerstick"</b>. \n<b>3/4</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'for_Powerstick_3'
+
+def Powerstick_roller_brush(update, context):
+    context.user_data['item_name'] = "Powerstick_roller_brush"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_roller_brush.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Powerstick_roller_brush_1.jpeg', 'rb') as f1, open('photoes/Powerstick_roller_brush_2.jpeg', 'rb') as f2):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_3'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_roller_brush'
+
+def Powerstick_for_hard_surfaces_roller_brush(update, context):
+    context.user_data['item_name'] = "Powerstick_for_hard_surfaces_roller_brush"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_roller_brush_for_hard_surfaces.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Powerstick_roller_brush_for_hard_surfaces_1.jpeg', 'rb') as f1, open('photoes/Powerstick_roller_brush_for_hard_surfaces_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_roller_brush_for_hard_surfaces_3.jpeg', 'rb') as f3):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_3'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_for_hard_surfaces_roller_brush'
+
+def Powerstick_mini_turbo_brush(update, context):
+    context.user_data['item_name'] = "Powerstick_mini_turbo_brush"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Powerstick_mini_turbo_brush.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Powerstick_mini_turbo_brush_1.jpeg', 'rb') as f1, open('photoes/Powerstick_mini_turbo_brush_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_mini_turbo_brush_3.jpeg', 'rb') as f3, open('photoes/Powerstick_mini_turbo_brush_4.jpeg', 'rb') as f4):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3),InputMediaPhoto(media=f4)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_3'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_mini_turbo_brush'
+
+def Charger(update, context):
+    context.user_data['item_name'] = "Charger"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+
+    with open('text/Charger.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Charger_1.jpeg', 'rb') as f1, open('photoes/Charger_2.jpeg', 'rb') as f2):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_3'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Charger'
+
+###########
+##       ## ЧЕТВЕРТАЯ СТРАНИЦА АКСЕСУАРОВ POWERSTICK
+###########
+
+def for_Powerstick_4(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🦯Щелевая насадка с подсветкой', callback_data='Powerstick_crevice_nozzle')],
+         [InlineKeyboardButton(text='🔋Li-ion аккумулятор 2500 мАч', callback_data='Li_ion_battery')],
+        [InlineKeyboardButton(text='☁️HEPA фильтр для пылесоса', callback_data='HEPA_filter')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_3'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Аксесуары Powerstick"</b>. \n<b>4/4</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'for_Powerstick_4'
+
+def Powerstick_crevice_nozzle(update, context):
+    context.user_data['item_name'] = "Powerstick_crevice_nozzle"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_crevice_nozzle.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Powerstick_crevice_nozzle_1.jpeg', 'rb') as f1, open('photoes/Powerstick_crevice_nozzle_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_crevice_nozzle_3.jpeg', 'rb') as f3, open('photoes/Powerstick_crevice_nozzle_4.jpeg', 'rb') as f4):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3),InputMediaPhoto(media=f4)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_4'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Powerstick_crevice_nozzle'
+
+def Li_ion_battery(update, context):
+    context.user_data['item_name'] = "Li_ion_battery"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Li_ion_battery.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Li_ion_battery_1.jpeg', 'rb') as f1, open('photoes/Li_ion_battery_2.jpeg', 'rb') as f2):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_4'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Li_ion_battery'
+
+def HEPA_filter(update, context):
+    context.user_data['item_name'] = "HEPA_filter"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/HEPA_filter.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/HEPA_filter_1.jpeg', 'rb') as f1, open('photoes/HEPA_filter_2.jpeg', 'rb') as f2,
+          open('photoes/HEPA_filter_3.jpeg', 'rb') as f3):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_for_Powerstick_4'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'HEPA_filter'
+
+###########
+##       ## ПЕРВАЯ СТРАНИЦА АКСЕСУАРОВ AQUASTICK
+###########
+
+def for_Aquastick(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🔋Li-ion аккумулятор 2600 мАч', callback_data='2600_mAh_Li_ion_battery')],
+         [InlineKeyboardButton(text='🔋Li-ion аккумулятор 4900 мАч', callback_data='4900_mAh_Li_ion_battery')],
+        [InlineKeyboardButton(text='☁️HEPA фильтр', callback_data='Aquastick_HEPA_filter')],
+        [InlineKeyboardButton(text='🧹Щетка', callback_data='Brush')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_accessories'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Аксесуары Aquastick"</b>. \n \n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'for_Powerstick_1'
+
+def mAh_2600_Li_ion_battery(update, context):
+    context.user_data['item_name'] = "Li_ion_battery_2600_mAh"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Li_ion_battery_2600_mAh.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Li_ion_battery_2600_mAh_1.jpeg', 'rb') as f1, open('photoes/Li_ion_battery_2600_mAh_2.jpeg', 'rb') as f2):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='for_Aquastick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Li_ion_battery_2600_mAh'
+
+def mAh_4900_Li_ion_battery(update, context):
+    context.user_data['item_name'] = "Li_ion_battery_4900_mAh"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Li_ion_battery_4900_mAh.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Li_ion_battery_4900_mAh_1.jpeg', 'rb') as f1, open('photoes/Li_ion_battery_4900_mAh_2.jpeg', 'rb') as f2):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='for_Aquastick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Li_ion_battery_4900_mAh'
+
+def Aquastick_HEPA_filter(update, context):
+    context.user_data['item_name'] = "Aquastick_HEPA_filter"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_HEPA_filter.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Aquastick_HEPA_filter_1.jpeg', 'rb') as f1, open('photoes/Aquastick_HEPA_filter_2.jpeg', 'rb') as f2,
+          open('photoes/Aquastick_HEPA_filter_3.jpeg', 'rb') as f3, open('photoes/Aquastick_HEPA_filter_4.jpeg', 'rb') as f4
+          , open('photoes/Aquastick_HEPA_filter_5.jpeg', 'rb') as f5):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),InputMediaPhoto(media=f3),InputMediaPhoto(media=f4)
+            , InputMediaPhoto(media=f5)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='for_Aquastick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_HEPA_filter'
+
+def Brush(update, context):
+    context.user_data['item_name'] = "Brush"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Brush.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Brush_1.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='for_Aquastick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Brush'
+
+###########
+##       ## ПЕРВАЯ СТРАНИЦА ДЛЯ AROMASTAR
+###########
+
+def for_Aromastar(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🔎Холдер с адаптером', callback_data='Holder_with_adapter')],
+         [InlineKeyboardButton(text='🧴Средство для очистки молочных систем', callback_data='Milk_system_cleaner')],
+        [InlineKeyboardButton(text='🧪Средство для удаления накипи', callback_data='Descaling_agent')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_accessories'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Аксесуары Aromastar"</b>. \n \n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'for_Aromastar'
+
+def Holder_with_adapter(update, context):
+    context.user_data['item_name'] = "Holder_with_adapter"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Holder_with_adapter.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Holder_with_adapter.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='for_Aromastar'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Holder_with_adapter'
+
+def Milk_system_cleaner(update, context):
+    context.user_data['item_name'] = "Milk_system_cleaner"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Milk_system_cleaner.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Milk_system_cleaner_1.jpeg', 'rb') as f1, open('photoes/Milk_system_cleaner_2.jpeg', 'rb') as f2):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='for_Aromastar'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Milk_system_cleaner'
+
+def Descaling_agent(update, context):
+    context.user_data['item_name'] = "Descaling_agent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Descaling_agent.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+
+    with (open('photoes/Descaling_agent_1.jpeg', 'rb') as f1, open('photoes/Descaling_agent_2.jpeg', 'rb') as f2):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='for_Aromastar'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Descaling_agent'
+
+
+###########
+##       ## ПЕРВАЯ СТРАНИЦА СРЕДСТВ
+###########
+
+def detergents_1(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🌊«Морской бриз» Aquastick 1000', callback_data='Aquastick_1_Detergent')],
+         [InlineKeyboardButton(text='🍊«Грейпфрут» Aquastick 1000', callback_data='Aquastick_2_Detergent')],
+        [InlineKeyboardButton(text='🌴«Сандаловое дерево» Aquastick 1000', callback_data='Aquastick_3_Detergent')],
+        [InlineKeyboardButton(text='📦Набор моющих средств Aquastick 200*3', callback_data='Aquastick_3v1_Detergent')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_accessories'),
+         InlineKeyboardButton(text='↪️Вперед', callback_data='detergents_2')],
+         [InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Моющие средства для пылесосов"</b>. \n<b>1/2</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'detergents_1'
+
+def Aquastick_1_Detergent(update, context):
+    context.user_data['item_name'] = "Aquastick_1_Detergent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_1_Detergent.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_1_Detergent.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_1_Detergent'
+
+def Aquastick_2_Detergent(update, context):
+    context.user_data['item_name'] = "Aquastick_2_Detergent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_2_Detergent.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_2_Detergent.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_2_Detergent'
+
+def Aquastick_3_Detergent(update, context):
+    context.user_data['item_name'] = "Aquastick_3_Detergent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_3_Detergent.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_3_Detergent.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_3_Detergent'
+
+def Aquastick_3v1_Detergent(update, context):
+    context.user_data['item_name'] = "Aquastick_3v1_Detergent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_3v1_Detergent.txt', 'r') as file:
+        caption = file.read()
+
+     # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                                message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_3v1_Detergent_1.jpeg', 'rb') as f1,open('photoes/Aquastick_3v1_Detergent_2.jpeg', 'rb') as f2,
+          open('photoes/Aquastick_3v1_Detergent_3.jpeg', 'rb') as f3):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+         [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_3v1_Detergent'
+
+
+###########
+##       ##  ВТОРАЯ СТРАНИЦА СРЕДСТВ
+###########
+
+def detergents_2(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🌊«Морской бриз» Aquastick 200', callback_data='Aquastick_1_2_Detergent')],
+         [InlineKeyboardButton(text='🍊«Грейпфрут» Aquastick 200', callback_data='Aquastick_2_2_Detergent')],
+        [InlineKeyboardButton(text='🌴«Сандаловое дерево» Aquastick 200', callback_data='Aquastick_3_2_Detergent')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Моющие средства для пылесосов"</b>. \n<b>2/2</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'detergents_2'
+
+def Aquastick_1_2_Detergent(update, context):
+    context.user_data['item_name'] = "Aquastick_1_2_Detergent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_1_2_Detergent.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_1_2_Detergent.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_1_2_Detergent'
+
+def Aquastick_2_2_Detergent(update, context):
+    context.user_data['item_name'] = "Aquastick_2_2_Detergent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_2_2_Detergent.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_2_2_Detergent.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_2_2_Detergent'
+
+def Aquastick_3_2_Detergent(update, context):
+    context.user_data['item_name'] = "Aquastick_3_2_Detergent"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_3_2_Detergent.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_3_2_Detergent.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='detergents_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_3_2_Detergent'
+
+
+###########
+##       ## АТРЕБУТИКА ДЛЯ IPHOME
+###########
+
+def Magssory_for_iPhone(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='📱Чехлы', callback_data='to_Case'),
+        InlineKeyboardButton(text='🗜Держатели', callback_data='Magssory_holders')],
+        [InlineKeyboardButton(text='🔌Зарядные устройства', callback_data='Magssory_charger')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='accessories'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Magssory for iPhone"</b>. \n\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'Magssory_for_iPhone'
+
+###########
+##       ## ЧЕХЛЫ
+###########
+def Case(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🔸Для Phone 13 Pro', callback_data='13_pro_iphone_case')],
+         [InlineKeyboardButton(text='🔶Для Phone 13 Pro Max', callback_data='13_pro_max_iphone_case')],
+         [InlineKeyboardButton(text='🔹Для Phone 14 Pro', callback_data='14_pro_iphone_case')],
+        [InlineKeyboardButton(text='🔷Для Phone 14 Pro Max', callback_data='14_pro_max_iphone_case')],
+        [InlineKeyboardButton(text='🔵Для Phone 14 Plus', callback_data='14_plus_iphone_case')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Magssory_for_iPhone'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Кевларовые чехлы"</b>. \n\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'to_Case'
+
+def case_iPhone_13_Pro(update, context):
+    context.user_data['item_name'] = "13_pro_iphone_case"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/case_iPhone_13_Pro.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/case_iPhone.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='to_Case'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = '13_pro_iphone_case'
+
+def case_iPhone_13_Pro_Max(update, context):
+    context.user_data['item_name'] = "13_pro_max_iphone_case"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/case_iPhone_13_Pro_Max.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/case_iPhone.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='to_Case'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = '13_pro_max_iphone_case'
+
+def case_iPhone_14_Pro(update, context):
+    context.user_data['item_name'] = "14_pro_iphone_case"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/case_iPhone_14_Pro.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/case_iPhone.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='to_Case'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = '14_pro_iphone_case'
+
+def case_iPhone_14_Pro_Max(update, context):
+    context.user_data['item_name'] = "14_pro_max_iphone_case"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/case_iPhone_14_Pro_Max.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/case_iPhone.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='to_Case'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = '14_pro_max_iphone_case'
+
+def case_iPhone_14_Plus(update, context):
+    context.user_data['item_name'] = "14_plus_iphone_case"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/case_iPhone_14_Plus.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/case_iPhone.jpeg', 'rb') as f1):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML')
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='to_Case'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = '14_plus_iphone_case'
+
+###########
+##       ## ЗАРЯДКИ ДЛЯ IPHONE
+###########
+
+def Magssory_charger(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🔌Беспроводное зарядное устройство 2 в 1 MagSafe', callback_data='Wireless_charger')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Magssory_for_iPhone'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Зарядные устройства"</b>. \n\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'Magssory_charger'
+
+def Wireless_charger(update, context):
+    context.user_data['item_name'] = "Wireless_charger"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Wireless_charger.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Wireless_charger_1.png', 'rb') as f1,open('photoes/Wireless_charger_2.png', 'rb') as f2,
+          open('photoes/Wireless_charger_3.png', 'rb') as f3,open('photoes/Wireless_charger_4.png', 'rb') as f4):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2,  parse_mode='HTML'),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Magssory_charger'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Wireless_charger'
+
+###########
+##       ## ДЕРЖАТЕЛЬ ДЛЯ IPHONE
+###########
+
+def Magssory_holders(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🩹Магнитный держатель MagSafe', callback_data='Holder_MagSafe')],
+         [InlineKeyboardButton(text='🕳Магнитный держатель MagSafe универсальный', callback_data='Universal_holder_MagSafe')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Magssory_for_iPhone'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Кевларовые чехлы"</b>. \n\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'Magssory_holders'
+
+def Holder_MagSafe(update, context):
+    context.user_data['item_name'] = "Holder_MagSafe"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Holder_MagSafe.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Holder_MagSafe_1.jpeg', 'rb') as f1,open('photoes/Holder_MagSafe_2.jpeg', 'rb') as f2,
+          open('photoes/Holder_MagSafe_3.jpeg', 'rb') as f3,open('photoes/Holder_MagSafe_4.jpeg', 'rb') as f4):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2,  parse_mode='HTML'),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Magssory_holders'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Holder_MagSafe'
+
+def Universal_holder_MagSafe(update, context):
+    context.user_data['item_name'] = "Universal_holder_MagSafe"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Universal_holder_MagSafe.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Universal_holder_MagSafe_1.jpeg', 'rb') as f1,open('photoes/Universal_holder_MagSafe_2.jpeg', 'rb') as f2,
+          open('photoes/Universal_holder_MagSafe_3.jpeg', 'rb') as f3,open('photoes/Universal_holder_MagSafe_4.jpeg', 'rb') as f4,
+          open('photoes/Universal_holder_MagSafe_5.jpeg', 'rb') as f5,open('photoes/Universal_holder_MagSafe_6.jpeg', 'rb') as f6):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Magssory_holders'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Universal_holder_MagSafe'
+
+###########
+##       ## КУХОННАЯ ТЕХНИКА
+###########
+
+def kitchen_appliances_button(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='☕️Кофеварки', callback_data='coffee_machine'),
+         InlineKeyboardButton(text='🥩️Мясорубки', callback_data='meat_grinder')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_catalog'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Кухонная техника"</b>. \n \n<b>Выберите тип:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'kitchen_appliances_button'
+
+def coffee_machine(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='☕️Aromastar', callback_data='Coffe_Machine_1')],
+         [InlineKeyboardButton(text='☕️🔎Aromastar Plus', callback_data='Coffe_Machine_2')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='kitchen_appliances_button'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Кофеварки"</b>. \n \n<b>Выберите тип:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'coffee_machine'
+
+def meat_grinder(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🥩Мясорубка Grindmaster', callback_data='Grindmaster')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='kitchen_appliances_button'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Мясорубки"</b>. \n \n<b>Выберите тип:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'meat_grinder'
+
+
+###########
+##       ## КОФЕВАРКИ
+###########
+
+def Coffe_Machine_1(update, context):
+    context.user_data['item_name'] = "Coffe_Machine_1"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Coffe_Machine_1.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Coffe_Machine_1_1.jpeg', 'rb') as f1,open('photoes/Coffe_Machine_1_2.jpeg', 'rb') as f2,
+          open('photoes/Coffe_Machine_1_3.jpeg', 'rb') as f3,open('photoes/Coffe_Machine_1_4.jpeg', 'rb') as f4,
+          open('photoes/Coffe_Machine_1_5.jpeg', 'rb') as f5,open('photoes/Coffe_Machine_1_6.jpeg', 'rb') as f6,
+          open('photoes/Coffe_Machine_1_7.jpeg', 'rb') as f7, open('photoes/Coffe_Machine_1_8.jpeg', 'rb') as f8):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='characteristics_1_Coffe_Machine')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='coffee_machine'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Coffe_Machine_1'
+
+def Coffe_Machine_1_characteristics(update, context):
+    with open('text/Coffe_Machine_1_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Coffe_Machine_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'characteristics_1_Coffe_Machine'
+
+def Coffe_Machine_2(update, context):
+    context.user_data['item_name'] = "Coffe_Machine_2"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Coffe_Machine_2.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Coffe_Machine_2_1.jpeg', 'rb') as f1,open('photoes/Coffe_Machine_2_2.jpeg', 'rb') as f2,
+          open('photoes/Coffe_Machine_2_3.jpeg', 'rb') as f3,open('photoes/Coffe_Machine_2_4.jpeg', 'rb') as f4,
+          open('photoes/Coffe_Machine_2_5.jpeg', 'rb') as f5,open('photoes/Coffe_Machine_2_6.jpeg', 'rb') as f6,
+          open('photoes/Coffe_Machine_2_7.jpeg', 'rb') as f7,open('photoes/Coffe_Machine_2_8.jpeg', 'rb') as f8):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='characteristics_2_Coffe_Machine')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='coffee_machine'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Coffe_Machine_2'
+
+def Coffe_Machine_2_characteristics(update, context):
+    with open('text/Coffe_Machine_2_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Coffe_Machine_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'characteristics_2_Coffe_Machine'
+
+
+###########
+##       ##  Grindmaster
+###########
+
+def Grindmaster(update, context):
+    context.user_data['item_name'] = "Grindmaster"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Grindmaster.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Grindmaster_1.jpeg', 'rb') as f1,open('photoes/Grindmaster_2.jpeg', 'rb') as f2,
+          open('photoes/Grindmaster_3.jpeg', 'rb') as f3,open('photoes/Grindmaster_4.jpeg', 'rb') as f4,
+          open('photoes/Grindmaster_5.jpeg', 'rb') as f5,open('photoes/Grindmaster_6.jpeg', 'rb') as f6,
+          open('photoes/Grindmaster_7.jpeg', 'rb') as f7, open('photoes/Grindmaster_8.jpeg', 'rb') as f8,
+          open('photoes/Grindmaster_9.jpeg', 'rb') as f9):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8),
+            InputMediaPhoto(media=f9)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='characteristics_Grindmaster')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='meat_grinder'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Grindmaster'
+
+def Grindmaster_characteristics(update, context):
+    with open('text/Grindmaster_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Grindmaster'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'characteristics_Grindmaster'
+
+###########
+##       ##
+###########
+
+def vacuum_cleaner_button(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='☯️Сухая+Влажная', callback_data='dry_wet_1'),
+         InlineKeyboardButton(text='💨️Сухая', callback_data='dry_1')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_catalog'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Пылесосы"</b>. \n \n<b>Выберите тип уборки:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'vacuum_cleaner_button'
+
+def dry_wet_1(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🥇Aquastick 3 in 1', callback_data='Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='🏅Aquastick 3 in 1 Plus', callback_data='plus_Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='🎖Aquastick 3 in 1 Power', callback_data='power_Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='🏆Aquastick 3 in 1 Ultima', callback_data='ultima_Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='vacuum_cleaner_button'),
+         InlineKeyboardButton(text='↪️Вперед', callback_data='dry_wet_2')],
+         [InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Пылесосы для сухой и влажной уборки"</b>. \n<b>1/2</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'dry_wet_1'
+
+def dry_wet_2(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🎗Powerstick AQUA', callback_data='aqua_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_wet_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Пылесосы для сухой и влажной уборки"</b>. \n<b>2/2</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'dry_wet_2'
+
+def dry_1(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🐶Powerstick Pet', callback_data='pet_Powerstick')],
+        [InlineKeyboardButton(text='🥇Powerstick Basic', callback_data='basic_Powerstick')],
+        [InlineKeyboardButton(text='🎖Powerstick Plus', callback_data='plus_Powerstick')],
+        [InlineKeyboardButton(text='🏆Powerstick Ultima', callback_data='ultima_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='vacuum_cleaner_button'),
+         InlineKeyboardButton(text='↪️Вперед', callback_data='dry_2')],
+         [InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Пылесосы для сухой уборки"</b>. \n<b>1/2</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'dry_1'
+
+def dry_2(update, context):
+    query = update.callback_query
+    query.answer()
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🥇Powerstick Glide Basic', callback_data='basic_glide_Powerstick')],
+        [InlineKeyboardButton(text='🎖Powerstick Glide Plus', callback_data='plus_glide_Powerstick')],
+        [InlineKeyboardButton(text='🏆Powerstick Glide Ultima', callback_data='ultima_glide_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')],
+
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Пылесосы для сухой уборки"</b>. \n<b>2/2</b>\n<b>Выберите аксесуар:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'dry_2'
+
+###########
+##       ##
+###########
+
+def Aquastick_3_in_1(update, context):
+    context.user_data['item_name'] = "Aquastick_3_in_1"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_3_in_1.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_3_in_1_1.jpeg', 'rb') as f1,open('photoes/Aquastick_3_in_1_2.jpeg', 'rb') as f2,
+          open('photoes/Aquastick_3_in_1_3.jpeg', 'rb') as f3,open('photoes/Aquastick_3_in_1_4.jpeg', 'rb') as f4,
+          open('photoes/Aquastick_3_in_1_5.jpeg', 'rb') as f5,open('photoes/Aquastick_3_in_1_6.jpeg', 'rb') as f6,
+          open('photoes/Aquastick_3_in_1_7.jpeg', 'rb') as f7, open('photoes/Aquastick_3_in_1_8.jpeg', 'rb') as f8):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='characteristics_Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_wet_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'Aquastick_3_in_1'
+
+def Aquastick_3_in_1_characteristics(update, context):
+    with open('text/Aquastick_3_in_1_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='Aquastick_3_in_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'Aquastick_3_in_1'
+
+def Aquastick_3_in_1_plus(update, context):
+    context.user_data['item_name'] = "plus_Aquastick_3_in_1"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_3_in_1_plus.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_3_in_1_1.jpeg', 'rb') as f1,open('photoes/Aquastick_3_in_1_2.jpeg', 'rb') as f2,
+          open('photoes/Aquastick_3_in_1_3.jpeg', 'rb') as f3,open('photoes/Aquastick_3_in_1_4.jpeg', 'rb') as f4,
+          open('photoes/Aquastick_3_in_1_5.jpeg', 'rb') as f5,open('photoes/Aquastick_3_in_1_6.jpeg', 'rb') as f6,
+          open('photoes/Aquastick_3_in_1_7.jpeg', 'rb') as f7, open('photoes/Aquastick_3_in_1_8.jpeg', 'rb') as f8):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='plus_characteristics_Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_wet_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'plus_Aquastick_3_in_1'
+
+def Aquastick_3_in_1_plus_characteristics(update, context):
+    with open('text/Aquastick_3_in_1_plus_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='plus_Aquastick_3_in_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'plus_characteristics_Aquastick_3_in_1'
+
+def Aquastick_3_in_1_power(update, context):
+    context.user_data['item_name'] = "power_Aquastick_3_in_1"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_3_in_1_power.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_3_in_1_1.jpeg', 'rb') as f1,open('photoes/Aquastick_3_in_1_2.jpeg', 'rb') as f2,
+          open('photoes/Aquastick_3_in_1_3.jpeg', 'rb') as f3,open('photoes/Aquastick_3_in_1_4.jpeg', 'rb') as f4,
+          open('photoes/Aquastick_3_in_1_5.jpeg', 'rb') as f5,open('photoes/Aquastick_3_in_1_6.jpeg', 'rb') as f6,
+          open('photoes/Aquastick_3_in_1_7.jpeg', 'rb') as f7, open('photoes/Aquastick_3_in_1_8.jpeg', 'rb') as f8):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='power_characteristics_Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_wet_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'power_Aquastick_3_in_1'
+
+def Aquastick_3_in_1_power_characteristics(update, context):
+    with open('text/Aquastick_3_in_1_power_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='power_Aquastick_3_in_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'power_characteristics_Aquastick_3_in_1'
+
+def Aquastick_3_in_1_ultima(update, context):
+    context.user_data['item_name'] = "ultima_Aquastick_3_in_1"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Aquastick_3_in_1_ultima.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Aquastick_3_in_1_1.jpeg', 'rb') as f1,open('photoes/Aquastick_3_in_1_2.jpeg', 'rb') as f2,
+          open('photoes/Aquastick_3_in_1_3.jpeg', 'rb') as f3,open('photoes/Aquastick_3_in_1_4.jpeg', 'rb') as f4,
+          open('photoes/Aquastick_3_in_1_5.jpeg', 'rb') as f5,open('photoes/Aquastick_3_in_1_6.jpeg', 'rb') as f6,
+          open('photoes/Aquastick_3_in_1_7.jpeg', 'rb') as f7, open('photoes/Aquastick_3_in_1_8.jpeg', 'rb') as f8):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='ultima_characteristics_Aquastick_3_in_1')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_wet_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'ultima_Aquastick_3_in_1'
+
+def Aquastick_3_in_1_ultima_characteristics(update, context):
+    with open('text/Aquastick_3_in_1_ultima_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='ultima_Aquastick_3_in_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'ultima_characteristics_Aquastick_3_in_1'
+
+
+def Powerstick_aqua(update, context):
+    context.user_data['item_name'] = "aqua_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_AQUA.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_AQUA_1.jpeg', 'rb') as f1,open('photoes/Powerstick_AQUA_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_AQUA_3.jpeg', 'rb') as f3,open('photoes/Powerstick_AQUA_4.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_AQUA_5.jpeg', 'rb') as f5,open('photoes/Powerstick_AQUA_6.jpeg', 'rb') as f6,
+          open('photoes/Powerstick_AQUA_7.jpeg', 'rb') as f7, open('photoes/Powerstick_AQUA_8.jpeg', 'rb') as f8,
+          open('photoes/Powerstick_AQUA_9.jpeg', 'rb') as f9, open('photoes/Powerstick_AQUA_10.jpeg', 'rb') as f10):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8),
+            InputMediaPhoto(media=f9),
+            InputMediaPhoto(media=f10)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='aqua_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_wet_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'aqua_Powerstick'
+
+def Powerstick_aqua_characteristics(update, context):
+    with open('text/Powerstick_AQUA_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='aqua_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'aqua_characteristics_Powerstick'
+
+
+###########
+##       ##
+###########
+
+def Powerstick_basic(update, context):
+    context.user_data['item_name'] = "basic_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_BASIC.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_BASIC.jpeg', 'rb') as f1,open('photoes/Powerstick_1.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_2.jpeg', 'rb') as f3,open('photoes/Powerstick_3.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_4.jpeg', 'rb') as f5,open('photoes/Powerstick_5.jpeg', 'rb') as f6,
+          open('photoes/Powerstick_6.jpeg', 'rb') as f7, open('photoes/Powerstick_7.jpeg', 'rb') as f8,
+          open('photoes/Powerstick_8.jpeg', 'rb') as f9, open('photoes/Powerstick_9.jpeg', 'rb') as f10):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8),
+            InputMediaPhoto(media=f9),
+            InputMediaPhoto(media=f10)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='basic_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'basic_Powerstick'
+
+def Powerstick_basic_characteristics(update, context):
+    with open('text/Powerstick_BASIC_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='basic_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'basic_characteristics_Powerstick'
+
+def Powerstick_pet(update, context):
+    context.user_data['item_name'] = "pet_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_PET.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_PET_1.jpeg', 'rb') as f1,open('photoes/Powerstick_PET_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_2.jpeg', 'rb') as f3,open('photoes/Powerstick_3.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_4.jpeg', 'rb') as f5,open('photoes/Powerstick_5.jpeg', 'rb') as f6,
+          open('photoes/Powerstick_6.jpeg', 'rb') as f7, open('photoes/Powerstick_7.jpeg', 'rb') as f8,
+          open('photoes/Powerstick_8.jpeg', 'rb') as f9, open('photoes/Powerstick_9.jpeg', 'rb') as f10):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8),
+            InputMediaPhoto(media=f9),
+            InputMediaPhoto(media=f10)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='pet_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'pet_Powerstick'
+
+def Powerstick_pet_characteristics(update, context):
+    with open('text/Powerstick_PET_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='pet_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'pet_characteristics_Powerstick'
+
+def Powerstick_plus(update, context):
+    context.user_data['item_name'] = "plus_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_PLUS.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_PLUS.jpeg', 'rb') as f1,open('photoes/Powerstick_1.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_2.jpeg', 'rb') as f3,open('photoes/Powerstick_3.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_4.jpeg', 'rb') as f5,open('photoes/Powerstick_5.jpeg', 'rb') as f6,
+          open('photoes/Powerstick_6.jpeg', 'rb') as f7, open('photoes/Powerstick_7.jpeg', 'rb') as f8,
+          open('photoes/Powerstick_8.jpeg', 'rb') as f9, open('photoes/Powerstick_9.jpeg', 'rb') as f10):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8),
+            InputMediaPhoto(media=f9),
+            InputMediaPhoto(media=f10)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='plus_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'plus_Powerstick'
+
+def Powerstick_plus_characteristics(update, context):
+    with open('text/Powerstick_PLUS_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='plus_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'plus_characteristics_Powerstick'
+
+def Powerstick_ultima(update, context):
+    context.user_data['item_name'] = "ultima_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_ULTIMA.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_ULTIMA_1.jpeg', 'rb') as f1,open('photoes/Powerstick_ULTIMA_2.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_2.jpeg', 'rb') as f3,open('photoes/Powerstick_3.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_4.jpeg', 'rb') as f5,open('photoes/Powerstick_5.jpeg', 'rb') as f6,
+          open('photoes/Powerstick_6.jpeg', 'rb') as f7, open('photoes/Powerstick_7.jpeg', 'rb') as f8,
+          open('photoes/Powerstick_8.jpeg', 'rb') as f9, open('photoes/Powerstick_9.jpeg', 'rb') as f10):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8),
+            InputMediaPhoto(media=f9),
+            InputMediaPhoto(media=f10)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='ultima_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_1'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'ultima_Powerstick'
+
+def Powerstick_ultima_characteristics(update, context):
+    with open('text/Powerstick_ULTIMA_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='ultima_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'ultima_characteristics_Powerstick'
+
+def Powerstick_glide_basic(update, context):
+    context.user_data['item_name'] = "basic_glide_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_GLIDE_BASIC.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_glide_basic.jpeg', 'rb') as f1,open('photoes/Powerstick_glide_1.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_glide_2.jpeg', 'rb') as f3,open('photoes/Powerstick_glide_3.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_glide_4.jpeg', 'rb') as f5,open('photoes/Powerstick_glide_5.jpeg', 'rb') as f6,
+          open('photoes/Powerstick_glide_6.jpeg', 'rb') as f7):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='basic_glide_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'basic_glide_Powerstick'
+
+def Powerstick_glide_basic_characteristics(update, context):
+    with open('text/Powerstick_GLIDE_BASIC_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='basic_glide_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'basic_glide_characteristics_Powerstick'
+
+def Powerstick_glide_plus(update, context):
+    context.user_data['item_name'] = "plus_glide_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_GLIDE_PLUS.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_glide_plus.jpeg', 'rb') as f1,open('photoes/Powerstick_glide_1.jpeg', 'rb') as f2,
+          open('photoes/Powerstick_glide_2.jpeg', 'rb') as f3,open('photoes/Powerstick_glide_3.jpeg', 'rb') as f4,
+          open('photoes/Powerstick_glide_4.jpeg', 'rb') as f5,open('photoes/Powerstick_glide_5.jpeg', 'rb') as f6,
+          open('photoes/Powerstick_glide_6.jpeg', 'rb') as f7):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='plus_glide_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'plus_glide_Powerstick'
+
+def Powerstick_glide_plus_characteristics(update, context):
+    with open('text/Powerstick_GLIDE_PLUS_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='plus_glide_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'plus_glide_characteristics_Powerstick'
+
+def Powerstick_glide_ultima(update, context):
+    context.user_data['item_name'] = "ultima_glide_Powerstick"
+    context.user_data['item_price'] = stored_data[context.user_data['item_name']]
+    context.user_data['back'] = context.user_data['item_name']
+    with open('text/Powerstick_GLIDE_ULTIMA.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    with (open('photoes/Powerstick_glide_ultima_1.jpeg', 'rb') as f1,open('photoes/Powerstick_glide_ultima_2.jpeg', 'rb') as f2,
+            open('photoes/Powerstick_glide_1.jpeg', 'rb') as f3,
+          open('photoes/Powerstick_glide_2.jpeg', 'rb') as f4,open('photoes/Powerstick_glide_3.jpeg', 'rb') as f5,
+          open('photoes/Powerstick_glide_4.jpeg', 'rb') as f6,open('photoes/Powerstick_glide_5.jpeg', 'rb') as f7,
+          open('photoes/Powerstick_glide_6.jpeg', 'rb') as f8):
+        media = [
+            InputMediaPhoto(media=f1, caption=caption, parse_mode='HTML'),
+            InputMediaPhoto(media=f2),
+            InputMediaPhoto(media=f3),
+            InputMediaPhoto(media=f4),
+            InputMediaPhoto(media=f5),
+            InputMediaPhoto(media=f6),
+            InputMediaPhoto(media=f7),
+            InputMediaPhoto(media=f8)
+        ]
+    bot.send_media_group(chat_id=update.callback_query.message.chat_id, media=media)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='🛒Добавить в корзину', callback_data='Add_to_basket'),
+         InlineKeyboardButton(text='📄Все характеристики', callback_data='ultima_glide_characteristics_Powerstick')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='dry_2'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text='Выберите действие:', reply_markup=keyboard)
+
+    context.user_data['state'] = 'ultima_glide_Powerstick'
+
+def Powerstick_glide_ultima_characteristics(update, context):
+    with open('text/Powerstick_GLIDE_ULTIMA_characteristics.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='ultima_glide_Powerstick'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'ultima_glide_characteristics_Powerstick'
+
+###########
+##       ##
+###########
+
+# Функция обработки нажатия на кнопку "Поддержка"
+def support_button(update, context):
+    query = update.callback_query
+    query.answer()
+    context.user_data['back'] = 'support_button'
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='Доставка', callback_data='pay'),
+        InlineKeyboardButton(text='Менеджер', callback_data='pay')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_main'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons, button_width=4)
+
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        'Вы находитель в разделе <b>"Каталог"</b>. \n \n<b>Выберите нужное действие:</b>'
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'support_button'
+
+###########
+##       ##
+###########
+
+# Функция обработки нажатия на кнопку "Поддержка"
+def cart_button(update, context):
+    query = update.callback_query
+    query.answer()
+    context.user_data['back'] = 'cart_button'
+    # Подключаемся к базе данных
+    conn = sqlite3.connect('text/bd.db')
+
+    # Создаем курсор для работы с базой данных
+    cursor = conn.cursor()
+
+    # Выполняем запрос SELECT
+    try:
+        cursor.execute("SELECT * FROM basket WHERE user_id = ?", (update.callback_query.message.chat_id,))
+    except:
+        None
+
+    # Получаем результат запроса
+    rows = cursor.fetchall()
+
+    text = "\n"
+    sum = 0
+
+    # Выводим результат
+    if rows != None:
+        for row in rows:
+
+            text = text+"* "+str(stored_name[row[1]])+" - <b>"+str(int(row[2]))+"₽</b>\n\n"
+            sum = sum+int(row[2])
+
+    # Закрываем соединение
+    conn.close()
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='Оплатить', callback_data='pay'),
+        InlineKeyboardButton(text='Очистить', callback_data='clear')],
+        [InlineKeyboardButton(text='↩️Назад', callback_data='back_to_main'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    text = 'Вы находитель в разделе <b>"Корзина"</b>. \nВыша корзина: \n'+text+'Сумма покупки: '+"<b>"+str(sum)+"</b>"+'₽\n\n<b>Выберите нужное действие:</b>'
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        text=text
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'cart_button'
+
+
+def pay(update,context):
+    query = update.callback_query
+    query.answer()
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data=context.user_data['back']),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    text = '<b>"Функция в разработке"</b>.\n\n<b>Выберите нужное действие:</b>'
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        text=text
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'pay'
+
+def clear_cart(update,context):
+    query = update.callback_query
+    query.answer()
+    # Подключаемся к базе данных
+    conn = sqlite3.connect('text/bd.db')
+
+    # Создаем курсор для работы с базой данных
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM basket WHERE user_id = ?", (update.callback_query.message.chat_id,))
+    except:
+        None
+    # Подтверждаем изменения в базе данных
+    conn.commit()
+    # Закрываем соединение с базой данных
+    conn.close()
+
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='cart'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    text = '<b>"Корзина"</b> очищена.\n\n<b>Выберите нужное действие:</b>'
+    # Отправляем сообщение с главным меню и клавиатурой
+    query.edit_message_text(
+        text=text
+        , reply_markup=keyboard, parse_mode='HTML')
+
+    # Сохраняем состояние пользователя
+    context.user_data['state'] = 'clear'
+
+###########
+##       ##
+###########
+
+# Функция обработки нажатия на кнопку "Поддержка"
+def sales_button(update, context):
+    with open('text/sales.txt', 'r') as file:
+        caption = file.read()
+
+    # Удаление старого сообщения
+    context.bot.delete_message(chat_id=update.callback_query.message.chat_id,
+                               message_id=update.callback_query.message.message_id)
+
+    # Создаем список кнопок
+    buttons = [
+        [InlineKeyboardButton(text='↩️Назад', callback_data='main'),
+         InlineKeyboardButton(text='🔝Главное меню', callback_data='main')]
+    ]
+    # Создаем объект клавиатуры с двумя строками кнопок
+    keyboard = InlineKeyboardMarkup(buttons)
+
+    # Отправляем сообщение с главным меню и клавиатурой
+    chat_id = update.callback_query.message.chat_id
+    context.bot.send_message(chat_id=chat_id, text=caption, reply_markup=keyboard,parse_mode='HTML')
+
+    context.user_data['state'] = 'promotions'
+
+####
+dispatcher.add_handler(CallbackQueryHandler(main_button, pattern='main'))
+#### main
+dispatcher.add_handler(CallbackQueryHandler(catalog_button, pattern='catalog'))
+dispatcher.add_handler(CallbackQueryHandler(support_button, pattern='support'))
+dispatcher.add_handler(CallbackQueryHandler(cart_button, pattern='cart'))
+dispatcher.add_handler(CallbackQueryHandler(clear_cart, pattern='clear'))
+dispatcher.add_handler(CallbackQueryHandler(pay, pattern='pay'))
+dispatcher.add_handler(CallbackQueryHandler(sales_button, pattern='promotions'))
+### catalog back_to_catalog
+dispatcher.add_handler(CallbackQueryHandler(accessories_button, pattern='accessories'))
+dispatcher.add_handler(CallbackQueryHandler(vacuum_cleaner_button, pattern='vacuum_cleaner'))
+dispatcher.add_handler(CallbackQueryHandler(kitchen_appliances_button, pattern='kitchen_appliances'))
+dispatcher.add_handler(CallbackQueryHandler(main_button, pattern='back_to_main'))
+dispatcher.add_handler(CallbackQueryHandler(catalog_button, pattern='back_to_catalog'))
+### for_Powerstick_1  Powerstick_telescopic_pipev for_Powerstick_2
+dispatcher.add_handler(CallbackQueryHandler(accessories_button, pattern='back_to_accessories'))
+dispatcher.add_handler(CallbackQueryHandler(for_Powerstick_1, pattern='for_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_turbo_brush, pattern='Powerstick_turbo_brush'))
+dispatcher.add_handler(CallbackQueryHandler(for_Powerstick_1, pattern='back_to_for_Powerstick_1'))
+dispatcher.add_handler(CallbackQueryHandler(Add_to_basket, pattern='Add_to_basket'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_hose, pattern='Powerstick_hose'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_wet_nozzle, pattern='Powerstick_wet_nozzle'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_telescopic_pipe, pattern='Powerstick_telescopic_pipe'))
+## for_Powerstick_2
+dispatcher.add_handler(CallbackQueryHandler(for_Powerstick_2, pattern='back_to_for_Powerstick_2'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_animal_combing_attachment, pattern='Powerstick_animal_combing_attachment'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_cleaning_knife, pattern='Powerstick_cleaning_knife'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_floor_docking_station, pattern='Powerstick_floor_docking_station'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_folding_pipe, pattern='Powerstick_folding_pipe'))
+### for_Powerstick_3
+dispatcher.add_handler(CallbackQueryHandler(for_Powerstick_3, pattern='back_to_for_Powerstick_3'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_roller_brush, pattern='Powerstick_roller_brush'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_for_hard_surfaces_roller_brush, pattern='Powerstick_for_hard_surfaces_roller_brush'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_mini_turbo_brush, pattern='Powerstick_mini_turbo_brush'))
+dispatcher.add_handler(CallbackQueryHandler(Charger, pattern='Charger'))
+###for_Powerstick_4
+dispatcher.add_handler(CallbackQueryHandler(for_Powerstick_4, pattern='back_to_for_Powerstick_4'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_crevice_nozzle, pattern='Powerstick_crevice_nozzle'))
+dispatcher.add_handler(CallbackQueryHandler(Li_ion_battery, pattern='Li_ion_battery'))
+dispatcher.add_handler(CallbackQueryHandler(HEPA_filter, pattern='HEPA_filter'))
+###for_Aquastick
+dispatcher.add_handler(CallbackQueryHandler(for_Aquastick, pattern='for_Aquastick'))
+dispatcher.add_handler(CallbackQueryHandler(mAh_2600_Li_ion_battery, pattern='2600_mAh_Li_ion_battery'))
+dispatcher.add_handler(CallbackQueryHandler(mAh_4900_Li_ion_battery, pattern='4900_mAh_Li_ion_battery'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_HEPA_filter, pattern='Aquastick_HEPA_filter'))
+dispatcher.add_handler(CallbackQueryHandler(Brush, pattern='Brush'))
+###for_Aromastar
+dispatcher.add_handler(CallbackQueryHandler(for_Aromastar, pattern='for_Aromastar'))
+dispatcher.add_handler(CallbackQueryHandler(Holder_with_adapter, pattern='Holder_with_adapter'))
+dispatcher.add_handler(CallbackQueryHandler(Milk_system_cleaner, pattern='Milk_system_cleaner'))
+dispatcher.add_handler(CallbackQueryHandler(Descaling_agent, pattern='Descaling_agent'))
+#detergents_1
+dispatcher.add_handler(CallbackQueryHandler(detergents_1, pattern='detergents_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_1_Detergent, pattern='Aquastick_1_Detergent'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_2_Detergent, pattern='Aquastick_2_Detergent'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_Detergent, pattern='Aquastick_3_Detergent'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3v1_Detergent, pattern='Aquastick_3v1_Detergent'))
+#detergents_2
+dispatcher.add_handler(CallbackQueryHandler(detergents_2, pattern='detergents_2'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_1_2_Detergent, pattern='Aquastick_1_2_Detergent'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_2_2_Detergent, pattern='Aquastick_2_2_Detergent'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_2_Detergent, pattern='Aquastick_3_2_Detergent'))
+#Magssory_for_iPhone
+dispatcher.add_handler(CallbackQueryHandler(Magssory_for_iPhone, pattern='Magssory_for_iPhone'))
+dispatcher.add_handler(CallbackQueryHandler(Case, pattern='to_Case'))
+dispatcher.add_handler(CallbackQueryHandler(Magssory_charger, pattern='Magssory_charger'))
+dispatcher.add_handler(CallbackQueryHandler(Magssory_holders, pattern='Magssory_holders'))
+#Case
+dispatcher.add_handler(CallbackQueryHandler(case_iPhone_13_Pro, pattern='13_pro_iphone_case'))
+dispatcher.add_handler(CallbackQueryHandler(case_iPhone_13_Pro_Max, pattern='13_pro_max_iphone_case'))
+dispatcher.add_handler(CallbackQueryHandler(case_iPhone_14_Pro, pattern='14_pro_iphone_case'))
+dispatcher.add_handler(CallbackQueryHandler(case_iPhone_14_Pro_Max, pattern='14_pro_max_iphone_case'))
+dispatcher.add_handler(CallbackQueryHandler(case_iPhone_14_Plus, pattern='14_plus_iphone_case'))
+#holders and chargers
+dispatcher.add_handler(CallbackQueryHandler(Holder_MagSafe, pattern='Holder_MagSafe'))
+dispatcher.add_handler(CallbackQueryHandler(Wireless_charger, pattern='Wireless_charger'))
+dispatcher.add_handler(CallbackQueryHandler(Universal_holder_MagSafe, pattern='Universal_holder_MagSafe'))
+#coffee_machine
+dispatcher.add_handler(CallbackQueryHandler(coffee_machine, pattern='coffee_machine'))
+dispatcher.add_handler(CallbackQueryHandler(Coffe_Machine_1, pattern='Coffe_Machine_1'))
+dispatcher.add_handler(CallbackQueryHandler(Coffe_Machine_1_characteristics, pattern='characteristics_1_Coffe_Machine'))
+dispatcher.add_handler(CallbackQueryHandler(Coffe_Machine_2, pattern='Coffe_Machine_2'))
+dispatcher.add_handler(CallbackQueryHandler(Coffe_Machine_2_characteristics, pattern='characteristics_2_Coffe_Machine'))
+#Grindmaster
+dispatcher.add_handler(CallbackQueryHandler(meat_grinder, pattern='meat_grinder'))
+dispatcher.add_handler(CallbackQueryHandler(Grindmaster, pattern='Grindmaster'))
+dispatcher.add_handler(CallbackQueryHandler(Grindmaster_characteristics, pattern='characteristics_Grindmaster'))
+#vacuum_cleaner
+dispatcher.add_handler(CallbackQueryHandler(dry_wet_1, pattern='dry_wet_1'))
+dispatcher.add_handler(CallbackQueryHandler(dry_wet_2, pattern='dry_wet_2'))
+dispatcher.add_handler(CallbackQueryHandler(dry_1, pattern='dry_1'))
+dispatcher.add_handler(CallbackQueryHandler(dry_2, pattern='dry_2'))
+#dry_wet
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1, pattern='Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1_characteristics, pattern='characteristics_Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1_plus, pattern='plus_Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1_plus_characteristics, pattern='plus_characteristics_Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1_power, pattern='power_Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1_power_characteristics, pattern='power_characteristics_Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1_ultima, pattern='ultima_Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Aquastick_3_in_1_ultima_characteristics, pattern='ultima_characteristics_Aquastick_3_in_1'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_aqua, pattern='aqua_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_aqua_characteristics, pattern='aqua_characteristics_Powerstick'))
+#dry_1
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_basic, pattern='basic_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_basic_characteristics, pattern='basic_characteristics_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_pet, pattern='pet_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_pet_characteristics, pattern='pet_characteristics_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_plus, pattern='plus_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_plus_characteristics, pattern='plus_characteristics_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_ultima, pattern='ultima_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_ultima_characteristics, pattern='ultima_characteristics_Powerstick'))
+#dry_2
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_glide_basic, pattern='basic_glide_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_glide_basic_characteristics, pattern='basic_glide_characteristics_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_glide_plus, pattern='plus_glide_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_glide_plus_characteristics, pattern='plus_glide_characteristics_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_glide_ultima, pattern='ultima_glide_Powerstick'))
+dispatcher.add_handler(CallbackQueryHandler(Powerstick_glide_ultima_characteristics, pattern='ultima_glide_characteristics_Powerstick'))
+#
+# Запускаем бота
+updater.start_polling()
+
